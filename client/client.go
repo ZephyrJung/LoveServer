@@ -1,9 +1,3 @@
-// Copyright 2015 The Gorilla WebSocket Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// +build ignore
-
 package client
 
 import (
@@ -19,7 +13,7 @@ import (
 
 var addr = flag.String("addr", "localhost:8080", "http service address")
 
-func main() {
+func Start() {
 	flag.Parse()
 	log.SetFlags(0)
 
