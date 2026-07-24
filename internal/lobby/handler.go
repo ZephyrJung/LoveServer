@@ -137,18 +137,19 @@ func (h *LobbyHandler) handleLeaveRoom(s *session.Session, msg *hub.Message) err
 		return s.SendJSON(hub.NewError(msg.Type, hub.ErrRoomNotFound, "room not found", msg.ID))
 	}
 	room.RemovePlayer(s.PlayerID)
-	if room.PlayerCount() == 0 {
-		h.lobby.RemoveRoom(room.ID)
-	}
-	s.RoomID = ""
 
-	// Notify remaining players
+	// Broadcast before potentially removing room
 	event := hub.NewEvent("event.player_left", map[string]any{
 		"room_id":   room.ID,
 		"player_id": s.PlayerID,
 	})
 	eventJSON, _ := json.Marshal(event)
 	h.sessions.Broadcast(room.ID, eventJSON)
+
+	if room.PlayerCount() == 0 {
+		h.lobby.RemoveRoom(room.ID)
+	}
+	s.RoomID = ""
 
 	return s.SendJSON(hub.NewResponse(msg.Type, map[string]string{"room_id": room.ID}, msg.ID))
 }
@@ -199,21 +200,24 @@ func (h *LobbyHandler) handleReady(s *session.Session, msg *hub.Message) error {
 	if !ok {
 		return s.SendJSON(hub.NewError(msg.Type, hub.ErrRoomNotFound, "room not found", msg.ID))
 	}
+
+	var ready bool
 	room.mu.Lock()
 	if p, ok := room.Players[s.PlayerID]; ok {
 		p.IsReady = !p.IsReady
+		ready = p.IsReady
 	}
 	room.mu.Unlock()
 
 	event := hub.NewEvent("event.player_ready", map[string]any{
 		"room_id":   room.ID,
 		"player_id": s.PlayerID,
-		"ready":     room.Players[s.PlayerID].IsReady,
+		"ready":     ready,
 	})
 	eventJSON, _ := json.Marshal(event)
 	h.sessions.Broadcast(room.ID, eventJSON)
 
-	return s.SendJSON(hub.NewResponse(msg.Type, map[string]any{"ready": room.Players[s.PlayerID].IsReady}, msg.ID))
+	return s.SendJSON(hub.NewResponse(msg.Type, map[string]any{"ready": ready}, msg.ID))
 }
 
 func (h *LobbyHandler) handleStartGame(s *session.Session, msg *hub.Message) error {
@@ -227,11 +231,12 @@ func (h *LobbyHandler) handleStartGame(s *session.Session, msg *hub.Message) err
 	if room.OwnerID != s.PlayerID {
 		return s.SendJSON(hub.NewError(msg.Type, hub.ErrNotRoomOwner, "only room owner can start", msg.ID))
 	}
-	if room.State != RoomWaiting {
-		return s.SendJSON(hub.NewError(msg.Type, hub.ErrGameAlreadyStarted, "game already started", msg.ID))
-	}
 
 	room.mu.Lock()
+	if room.State != RoomWaiting {
+		room.mu.Unlock()
+		return s.SendJSON(hub.NewError(msg.Type, hub.ErrGameAlreadyStarted, "game already started", msg.ID))
+	}
 	room.State = RoomPlaying
 	room.mu.Unlock()
 
@@ -272,20 +277,25 @@ func (h *LobbyHandler) handleGameMove(s *session.Session, msg *hub.Message) erro
 	if !ok {
 		return s.SendJSON(hub.NewError(msg.Type, hub.ErrRoomNotFound, "room not found", msg.ID))
 	}
+
+	room.mu.RLock()
 	if room.State != RoomPlaying {
+		room.mu.RUnlock()
 		return s.SendJSON(hub.NewError(msg.Type, hub.ErrGameAlreadyStarted, "game not started", msg.ID))
 	}
+	player := room.Players[s.PlayerID]
+	room.mu.RUnlock()
+
 	if room.GameInstance == nil {
 		return s.SendJSON(hub.NewError(msg.Type, hub.ErrInternal, "no game instance", msg.ID))
 	}
 
-	player := room.Players[s.PlayerID]
 	result, err := room.GameInstance.OnMessage(room, player, msg.Data)
 	if err != nil {
 		log.Printf("game move error: %v", err)
+		return s.SendJSON(hub.NewError(msg.Type, hub.ErrInternal, "move failed: "+err.Error(), msg.ID))
 	}
 	if result != nil {
-		// Send game move result to all players
 		gameEvent := hub.NewEvent("event.game_move", map[string]any{
 			"room_id": room.ID,
 			"player":  s.PlayerID,

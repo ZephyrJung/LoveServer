@@ -53,9 +53,6 @@ func (l *Lobby) CreateRoom(name, gameName, ownerID string, settings map[string]a
 	}
 	room.GameInstance = gameInst
 
-	// Add owner as first player
-	room.AddPlayer(ownerID, ownerID) // nickname will be set from session
-
 	l.rooms[roomID] = room
 	return room, nil
 }
