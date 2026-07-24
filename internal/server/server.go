@@ -20,7 +20,8 @@ import (
 	"github.com/ZephyrJung/LoveServer/internal/session"
 	"github.com/ZephyrJung/LoveServer/internal/storage"
 
-	"github.com/ZephyrJung/LoveServer/games/template"
+	"github.com/ZephyrJung/LoveServer/games/tankbattle"
+		"github.com/ZephyrJung/LoveServer/games/template"
 )
 
 type Server struct {
@@ -76,6 +77,7 @@ func (s *Server) Init(ctx context.Context) error {
 	// Init game registry
 	s.gameRegistry = game.NewRegistry()
 	s.gameRegistry.Register("template", func() game.Game { return template.NewGame() })
+		s.gameRegistry.Register("tankbattle", func() game.Game { return tankbattle.NewGame() })
 	s.gameManager = game.NewInstanceManager(s.gameRegistry)
 
 	// Init lobby

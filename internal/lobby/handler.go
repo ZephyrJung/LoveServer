@@ -253,6 +253,28 @@ func (h *LobbyHandler) handleStartGame(s *session.Session, msg *hub.Message) err
 	room.mu.Unlock()
 
 	if room.GameInstance != nil {
+		// Set broadcast callback for real-time games
+		if broadcaster, ok := room.GameInstance.(interface{ SetBroadcast(func(string, interface{})) }); ok {
+			broadcaster.SetBroadcast(func(eventType string, data interface{}) {
+				event := hub.NewEvent(eventType, data)
+				eventJSON, err := json.Marshal(event)
+				if err != nil {
+					log.Printf("failed to marshal %s event: %v", eventType, err)
+					return
+				}
+				h.sessions.Broadcast(room.ID, eventJSON)
+			})
+		}
+
+		// Register players with game if it supports it
+		if registrar, ok := room.GameInstance.(interface{ RegisterPlayer(string, string, int) }); ok {
+			room.mu.RLock()
+			for pid, p := range room.Players {
+				registrar.RegisterPlayer(pid, p.Nickname, 0)
+			}
+			room.mu.RUnlock()
+		}
+
 		room.GameInstance.OnStart(room)
 	}
 
