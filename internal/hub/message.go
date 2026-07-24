@@ -56,6 +56,7 @@ const (
 	ErrNotRoomOwner       = 2004
 	ErrGameNotFound       = 3001
 	ErrGameAlreadyStarted = 3002
+	ErrGameNotStarted     = 3003
 	ErrMatchQueueFull     = 4001
 	ErrInternal           = 5001
 )
@@ -70,6 +71,7 @@ var errorMessages = map[int]string{
 	ErrNotRoomOwner:       "not the room owner",
 	ErrGameNotFound:       "game type not found",
 	ErrGameAlreadyStarted: "game already started",
+	ErrGameNotStarted:     "game not started",
 	ErrMatchQueueFull:     "match queue is full",
 	ErrInternal:           "internal server error",
 }

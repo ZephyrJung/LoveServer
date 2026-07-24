@@ -281,7 +281,7 @@ func (h *LobbyHandler) handleGameMove(s *session.Session, msg *hub.Message) erro
 	room.mu.RLock()
 	if room.State != RoomPlaying {
 		room.mu.RUnlock()
-		return s.SendJSON(hub.NewError(msg.Type, hub.ErrGameAlreadyStarted, "game not started", msg.ID))
+		return s.SendJSON(hub.NewError(msg.Type, hub.ErrGameNotStarted, "game is not in playing state", msg.ID))
 	}
 	player := room.Players[s.PlayerID]
 	room.mu.RUnlock()
