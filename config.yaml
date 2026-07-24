@@ -1,0 +1,16 @@
+server:
+  addr: ":8080"
+  auth_timeout: 10
+
+postgres:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "postgres"
+  dbname: "loveserver"
+  sslmode: "disable"
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0

@@ -1,11 +1,16 @@
 package main
 
 import (
-	"github.com/ZephyrJung/LoveServer/server"
-	"github.com/ZephyrJung/LoveServer/client"
+	"log"
+
+	"github.com/ZephyrJung/LoveServer/internal/config"
 )
 
 func main() {
-	go server.Start()
-	go client.Start()
+	cfg, err := config.Load("config.yaml")
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
+	_ = cfg
+	log.Println("LoveServer starting...")
 }
