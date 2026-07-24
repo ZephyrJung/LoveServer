@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"time"
 )
 
@@ -49,12 +50,16 @@ func (s *GameRecordStore) CreateTable(ctx context.Context) error {
 }
 
 func (s *GameRecordStore) SaveGameResult(ctx context.Context, result *GameResult) error {
-	playersJSON, _ := json.Marshal(result.Players)
+	playersJSON, err := json.Marshal(result.Players)
+	if err != nil {
+		log.Printf("failed to marshal players: %v", err)
+		return err
+	}
 	var rawDataJSON []byte
 	if result.RawData != nil {
 		rawDataJSON = result.RawData
 	}
-	_, err := s.db.Pool().Exec(ctx, `
+	_, err = s.db.Pool().Exec(ctx, `
 		INSERT INTO game_records (game_name, room_id, players, winner_id, raw_data, started_at, ended_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, result.GameName, result.RoomID, playersJSON, result.WinnerID, rawDataJSON, result.StartedAt, result.EndedAt)

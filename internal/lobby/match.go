@@ -20,6 +20,7 @@ type MatchQueue struct {
 	mu       sync.Mutex
 	lobby    *Lobby
 	registry *game.Registry
+	OnMatch  func(roomID string, playerIDs []string) // callback for match notification
 }
 
 func NewMatchQueue(lobby *Lobby, registry *game.Registry) *MatchQueue {
@@ -113,6 +114,11 @@ func (q *MatchQueue) tryMatch() {
 			// Add all matched players to the room
 			for _, entry := range matched {
 				room.AddPlayer(entry.PlayerID, entry.Nickname)
+			}
+
+			// Notify matched players via callback
+			if q.OnMatch != nil {
+				q.OnMatch(room.ID, playerIDs)
 			}
 		}
 		q.queues[gameName] = queue

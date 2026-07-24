@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,6 +34,8 @@ type Server struct {
 	redisStore   *storage.RedisStore
 	authHandler  *auth.AuthHandler
 	upgrader     websocket.Upgrader
+	httpServer   *http.Server
+	cancel       context.CancelFunc
 }
 
 func New(cfg *config.Config) *Server {
@@ -38,6 +43,7 @@ func New(cfg *config.Config) *Server {
 		cfg:      cfg,
 		sessions: session.NewManager(),
 		upgrader: websocket.Upgrader{
+			// DEV setting: allow all origins. For production, restrict to known origins or remove this override.
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
 	}
@@ -74,7 +80,19 @@ func (s *Server) Init(ctx context.Context) error {
 
 	// Init lobby
 	s.lobby = lobby.NewLobby(s.gameRegistry, s.gameManager)
-	s.lobby.StartMatchLoop(ctx)
+	s.lobby.MatchQueue().OnMatch = func(roomID string, playerIDs []string) {
+		event := hub.NewEvent("event.match_found", map[string]any{
+			"room_id": roomID,
+		})
+		eventJSON, err := json.Marshal(event)
+		if err != nil {
+			log.Printf("failed to marshal match_found event: %v", err)
+			return
+		}
+		for _, pid := range playerIDs {
+			s.sessions.SendToPlayer(pid, json.RawMessage(eventJSON))
+		}
+	}
 
 	// Init hub
 	s.hub = hub.New()
@@ -96,9 +114,33 @@ func (s *Server) Init(ctx context.Context) error {
 }
 
 func (s *Server) Start() error {
+	// Create cancellable context for the match loop
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	s.lobby.StartMatchLoop(ctx)
+
+	s.httpServer = &http.Server{
+		Addr: s.cfg.Server.Addr,
+	}
+
 	http.HandleFunc("/ws", s.handleWS)
 	log.Printf("LoveServer listening on %s", s.cfg.Server.Addr)
-	return http.ListenAndServe(s.cfg.Server.Addr, nil)
+
+	// Handle graceful shutdown on OS signals
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-sigCh
+		log.Printf("received signal %v, shutting down...", sig)
+		cancel()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
+			log.Printf("server shutdown error: %v", err)
+		}
+	}()
+
+	return s.httpServer.ListenAndServe()
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {

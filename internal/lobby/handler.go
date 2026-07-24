@@ -121,8 +121,12 @@ func (h *LobbyHandler) handleJoinRoom(s *session.Session, msg *hub.Message) erro
 		"player_id": s.PlayerID,
 		"nickname":  s.Nickname,
 	})
-	eventJSON, _ := json.Marshal(event)
-	h.sessions.Broadcast(room.ID, eventJSON)
+	eventJSON, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("failed to marshal player_joined event: %v", err)
+	} else {
+		h.sessions.Broadcast(room.ID, eventJSON)
+	}
 
 	return s.SendJSON(hub.NewResponse(msg.Type, roomToJSON(room), msg.ID))
 }
@@ -143,8 +147,12 @@ func (h *LobbyHandler) handleLeaveRoom(s *session.Session, msg *hub.Message) err
 		"room_id":   room.ID,
 		"player_id": s.PlayerID,
 	})
-	eventJSON, _ := json.Marshal(event)
-	h.sessions.Broadcast(room.ID, eventJSON)
+	eventJSON, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("failed to marshal player_left event: %v", err)
+	} else {
+		h.sessions.Broadcast(room.ID, eventJSON)
+	}
 
 	if room.PlayerCount() == 0 {
 		h.lobby.RemoveRoom(room.ID)
@@ -214,8 +222,12 @@ func (h *LobbyHandler) handleReady(s *session.Session, msg *hub.Message) error {
 		"player_id": s.PlayerID,
 		"ready":     ready,
 	})
-	eventJSON, _ := json.Marshal(event)
-	h.sessions.Broadcast(room.ID, eventJSON)
+	eventJSON, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("failed to marshal player_ready event: %v", err)
+	} else {
+		h.sessions.Broadcast(room.ID, eventJSON)
+	}
 
 	return s.SendJSON(hub.NewResponse(msg.Type, map[string]any{"ready": ready}, msg.ID))
 }
@@ -248,8 +260,12 @@ func (h *LobbyHandler) handleStartGame(s *session.Session, msg *hub.Message) err
 		"room_id": room.ID,
 		"game":    room.GameName,
 	})
-	eventJSON, _ := json.Marshal(event)
-	h.sessions.Broadcast(room.ID, eventJSON)
+	eventJSON, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("failed to marshal game_started event: %v", err)
+	} else {
+		h.sessions.Broadcast(room.ID, eventJSON)
+	}
 
 	return s.SendJSON(hub.NewResponse(msg.Type, map[string]string{"status": "started"}, msg.ID))
 }
@@ -264,8 +280,12 @@ func (h *LobbyHandler) handleChat(s *session.Session, msg *hub.Message) error {
 		"nickname":  s.Nickname,
 		"data":      msg.Data,
 	})
-	eventJSON, _ := json.Marshal(chatEvent)
-	h.sessions.Broadcast(s.RoomID, eventJSON)
+	eventJSON, err := json.Marshal(chatEvent)
+	if err != nil {
+		log.Printf("failed to marshal chat event: %v", err)
+	} else {
+		h.sessions.Broadcast(s.RoomID, eventJSON)
+	}
 	return nil
 }
 
@@ -286,11 +306,15 @@ func (h *LobbyHandler) handleGameMove(s *session.Session, msg *hub.Message) erro
 	player := room.Players[s.PlayerID]
 	room.mu.RUnlock()
 
+	if player == nil {
+		return s.SendJSON(hub.NewError(msg.Type, hub.ErrNotInRoom, "player not in room", msg.ID))
+	}
+
 	if room.GameInstance == nil {
 		return s.SendJSON(hub.NewError(msg.Type, hub.ErrInternal, "no game instance", msg.ID))
 	}
 
-	result, err := room.GameInstance.OnMessage(room, player, msg.Data)
+	result, err := room.GameInstance.OnMessage(room, s.PlayerID, msg.Data)
 	if err != nil {
 		log.Printf("game move error: %v", err)
 		return s.SendJSON(hub.NewError(msg.Type, hub.ErrInternal, "move failed: "+err.Error(), msg.ID))
@@ -301,8 +325,12 @@ func (h *LobbyHandler) handleGameMove(s *session.Session, msg *hub.Message) erro
 			"player":  s.PlayerID,
 			"result":  result,
 		})
-		eventJSON, _ := json.Marshal(gameEvent)
-		h.sessions.Broadcast(room.ID, eventJSON)
+		eventJSON, err := json.Marshal(gameEvent)
+		if err != nil {
+			log.Printf("failed to marshal game_move event: %v", err)
+		} else {
+			h.sessions.Broadcast(room.ID, eventJSON)
+		}
 	}
 	return nil
 }
