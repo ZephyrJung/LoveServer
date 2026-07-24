@@ -16,6 +16,8 @@ import (
 	"github.com/ZephyrJung/LoveServer/internal/lobby"
 	"github.com/ZephyrJung/LoveServer/internal/session"
 	"github.com/ZephyrJung/LoveServer/internal/storage"
+
+	"github.com/ZephyrJung/LoveServer/games/template"
 )
 
 type Server struct {
@@ -67,6 +69,7 @@ func (s *Server) Init(ctx context.Context) error {
 
 	// Init game registry
 	s.gameRegistry = game.NewRegistry()
+	s.gameRegistry.Register("template", func() game.Game { return template.NewGame() })
 	s.gameManager = game.NewInstanceManager(s.gameRegistry)
 
 	// Init lobby
